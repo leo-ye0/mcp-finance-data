@@ -157,7 +157,10 @@ Once connected, you can ask Claude things like:
 - "What are the key financial ratios for NVDA?"
 
 ### Example Outputs
-
+Ask for permission:
+![When is the next earnings date for Amazon(permission)?](./examples/ex3_1.png)
+What Claude returns:
+![When is the next earnings date for Amazon?](./examples/ex3_2.png)
 ![Who are the major institutional holders of AAPL?](./examples/ex1_yf.png)
 
 ![Show me GOOGL's cash flow analysis](./examples/ex2_yf.png)
