@@ -22,58 +22,6 @@ from fastmcp import FastMCP
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-class ESGRiskLevel(str, Enum):
-    """ESG risk level enumeration."""
-    NEGLIGIBLE = "Negligible risk"
-    LOW = "Low risk"
-    MEDIUM = "Medium risk"
-    HIGH = "High risk"
-    SEVERE = "Severe risk"
-
-
-class ESGData(BaseModel):
-    """ESG (Environmental, Social, Governance) data model."""
-    total_risk_score: Optional[float] = None
-    risk_level: Optional[str] = None
-    environmental_risk_score: Optional[float] = None
-    environmental_risk_level: Optional[str] = None
-    social_risk_score: Optional[float] = None
-    social_risk_level: Optional[str] = None
-    governance_risk_score: Optional[float] = None
-    governance_risk_level: Optional[str] = None
-    controversy_level: Optional[int] = None
-    controversy_description: Optional[str] = None
-    peer_rank: Optional[str] = None
-    peer_percentile: Optional[float] = None
-
-
-class StockInfo(BaseModel):
-    """Stock information data model."""
-    """Yahoo Finance Server
-
-A financial data analysis server inspired by the Model Context Protocol,
-providing comprehensive Yahoo Finance data through a clean API.
-"""
-
-import asyncio
-import json
-import logging
-import os
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
-from enum import Enum
-
-import yfinance as yf
-import pandas as pd
-import numpy as np
-from pydantic import BaseModel, Field
-from fastmcp import FastMCP
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 # Initialize FastMCP server
 yfinance_server = FastMCP(
     "yahoo-finance",
@@ -920,12 +868,6 @@ async def get_earnings_info(symbol: str) -> str:
         symbol = validate_symbol(symbol)
         stock = yf.Ticker(symbol)
         
-        # Get earnings data
-        calendar = stock.calendar
-        earnings = stock.earnings
-        earnings_dates = stock.earnings_dates
-        earnings_trend = stock.earnings_trend
-        
         # Initialize earnings info
         earnings_info = {
             "symbol": symbol,
@@ -935,45 +877,61 @@ async def get_earnings_info(symbol: str) -> str:
             "revenue_estimate": None,
             "revenue_actual": None,
             "earnings_history": [],
-            "earnings_trend": []
+            "quarterly_earnings": []
         }
         
         # Process calendar data
-        if calendar is not None and not calendar.empty:
-            try:
-                earnings_info["next_earnings_date"] = calendar.index[0].strftime("%Y-%m-%d") if hasattr(calendar.index[0], 'strftime') else str(calendar.index[0])
-                earnings_info["eps_estimate"] = float(calendar.iloc[0].get("EPS Estimate", 0)) if pd.notna(calendar.iloc[0].get("EPS Estimate")) else None
-                earnings_info["revenue_estimate"] = float(calendar.iloc[0].get("Revenue Estimate", 0)) if pd.notna(calendar.iloc[0].get("Revenue Estimate")) else None
-            except Exception as e:
-                logger.warning(f"Error processing calendar data for {symbol}: {e}")
+        try:
+            calendar = stock.calendar
+            if calendar is not None:
+                if isinstance(calendar, pd.DataFrame) and not calendar.empty:
+                    earnings_info["next_earnings_date"] = calendar.index[0].strftime("%Y-%m-%d") if hasattr(calendar.index[0], 'strftime') else str(calendar.index[0])
+                    earnings_info["eps_estimate"] = float(calendar.iloc[0].get("EPS Estimate", 0)) if pd.notna(calendar.iloc[0].get("EPS Estimate")) else None
+                    earnings_info["revenue_estimate"] = float(calendar.iloc[0].get("Revenue Estimate", 0)) if pd.notna(calendar.iloc[0].get("Revenue Estimate")) else None
+                elif isinstance(calendar, dict):
+                    # Handle dictionary format
+                    if 'Earnings Date' in calendar:
+                        date = calendar['Earnings Date']
+                        earnings_info["next_earnings_date"] = date.strftime("%Y-%m-%d") if hasattr(date, 'strftime') else str(date)
+                    earnings_info["eps_estimate"] = float(calendar.get('EPS Estimate', 0)) if pd.notna(calendar.get('EPS Estimate')) else None
+                    earnings_info["revenue_estimate"] = float(calendar.get('Revenue Estimate', 0)) if pd.notna(calendar.get('Revenue Estimate')) else None
+        except Exception as e:
+            logger.warning(f"Error processing calendar data for {symbol}: {e}")
         
         # Process earnings history
-        if earnings_dates is not None and not earnings_dates.empty:
-            for date, row in earnings_dates.iterrows():
-                try:
-                    history_entry = {
-                        "date": date.strftime("%Y-%m-%d") if hasattr(date, 'strftime') else str(date),
-                        "eps_estimate": float(row.get("EPS Estimate", 0)) if pd.notna(row.get("EPS Estimate")) else None,
-                        "eps_actual": float(row.get("Reported EPS", 0)) if pd.notna(row.get("Reported EPS")) else None,
-                        "surprise": float(row.get("Surprise(%)", 0)) if pd.notna(row.get("Surprise(%)")) else None
-                    }
-                    earnings_info["earnings_history"].append(history_entry)
-                except Exception as e:
-                    logger.warning(f"Error processing earnings history entry for {symbol}: {e}")
+        try:
+            earnings_dates = stock.earnings_dates
+            if isinstance(earnings_dates, pd.DataFrame) and not earnings_dates.empty:
+                for date, row in earnings_dates.iterrows():
+                    try:
+                        history_entry = {
+                            "date": date.strftime("%Y-%m-%d") if hasattr(date, 'strftime') else str(date),
+                            "eps_estimate": float(row.get("EPS Estimate", 0)) if pd.notna(row.get("EPS Estimate")) else None,
+                            "eps_actual": float(row.get("Reported EPS", 0)) if pd.notna(row.get("Reported EPS")) else None,
+                            "surprise": float(row.get("Surprise(%)", 0)) if pd.notna(row.get("Surprise(%)")) else None
+                        }
+                        earnings_info["earnings_history"].append(history_entry)
+                    except Exception as e:
+                        logger.warning(f"Error processing earnings history entry for {symbol}: {e}")
+        except Exception as e:
+            logger.warning(f"Error processing earnings dates for {symbol}: {e}")
         
-        # Process earnings trend
-        if earnings_trend is not None and not earnings_trend.empty:
-            for date, row in earnings_trend.iterrows():
-                try:
-                    trend_entry = {
-                        "period": str(date),
-                        "eps_estimate": float(row.get("EPS Estimate", 0)) if pd.notna(row.get("EPS Estimate")) else None,
-                        "eps_trend": float(row.get("EPS Trend", 0)) if pd.notna(row.get("EPS Trend")) else None,
-                        "eps_revisions": float(row.get("EPS Revisions", 0)) if pd.notna(row.get("EPS Revisions")) else None
-                    }
-                    earnings_info["earnings_trend"].append(trend_entry)
-                except Exception as e:
-                    logger.warning(f"Error processing earnings trend entry for {symbol}: {e}")
+        # Process quarterly earnings
+        try:
+            earnings = stock.earnings
+            if isinstance(earnings, pd.DataFrame) and not earnings.empty:
+                for date, row in earnings.iterrows():
+                    try:
+                        quarter_entry = {
+                            "date": date.strftime("%Y-%m-%d") if hasattr(date, 'strftime') else str(date),
+                            "revenue": float(row.get("Revenue", 0)) if pd.notna(row.get("Revenue")) else None,
+                            "earnings": float(row.get("Earnings", 0)) if pd.notna(row.get("Earnings")) else None
+                        }
+                        earnings_info["quarterly_earnings"].append(quarter_entry)
+                    except Exception as e:
+                        logger.warning(f"Error processing quarterly earnings entry for {symbol}: {e}")
+        except Exception as e:
+            logger.warning(f"Error processing quarterly earnings for {symbol}: {e}")
         
         return json.dumps(earnings_info, indent=2)
     except Exception as e:
@@ -1305,6 +1263,9 @@ def main():
     logger.info("Starting Yahoo Finance MCP Server...")
     yfinance_server.run(transport="stdio")
 
+
+if __name__ == "__main__":
+    main() 
 
 if __name__ == "__main__":
     main() 
