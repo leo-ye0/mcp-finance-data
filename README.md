@@ -113,20 +113,13 @@ await get_market_summary()  # Quick overview of major indices
 
 ### Setup with Claude Desktop
 
-1. Install the server:
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
-
-2. Open Claude's config:
+1. Open Claude's config:
 ```bash
 # On MacOS
 code ~/Library/Application\ Support/Claude/claude_desktop_config.json
 ```
 
-3. Add this to your config:
+2. Add this to your config:
 ```json
 {
   "mcpServers": {
