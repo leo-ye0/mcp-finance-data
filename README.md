@@ -200,8 +200,6 @@ code ~/Library/Application\ Support/Claude/claude_desktop_config.json
 }
 ```
 
-Replace `/path/to/yahoo-finance-mcp` with your actual installation path.
-
 ### Example Prompts
 
 Once connected, you can ask Claude things like:
