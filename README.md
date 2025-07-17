@@ -118,7 +118,6 @@ await get_market_summary()  # Quick overview of major indices
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-python src/yahoo_finance_mcp/server.py
 ```
 
 2. Open Claude's config:
