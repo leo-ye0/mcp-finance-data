@@ -131,7 +131,7 @@ code ~/Library/Application\ Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
     "yfinance": {
-      "command": "uv path like "/Users/xxxxx/anaconda3/bin/uv",",
+      "command": "uv path like "/Users/xxxxx/anaconda3/bin/uv",
       "args": [
         "--directory",
         "PATH/TO/FOLDER/yahoo-finance-mcp",
