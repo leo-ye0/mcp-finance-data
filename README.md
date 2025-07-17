@@ -13,19 +13,6 @@ A comprehensive financial data analysis server built with the Model Context Prot
 - Sector and industry classification (stocks)
 - Cryptocurrency support (BTC-USD, ETH-USD, etc.)
 
-### Portfolio Management
-- Portfolio composition analysis
-- Performance metrics
-  - Total return
-  - Annual return
-  - Volatility
-  - Sharpe ratio
-- Risk metrics
-  - Maximum drawdown
-  - Value at Risk (VaR)
-  - Portfolio beta
-- Custom portfolio weights
-
 ### Market Data
 - Stock news and updates
 - Analyst recommendations
