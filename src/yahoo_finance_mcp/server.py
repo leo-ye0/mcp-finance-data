@@ -23,6 +23,31 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+class ESGRiskLevel(str, Enum):
+    """ESG risk level enumeration."""
+    NEGLIGIBLE = "Negligible risk"
+    LOW = "Low risk"
+    MEDIUM = "Medium risk"
+    HIGH = "High risk"
+    SEVERE = "Severe risk"
+
+
+class ESGData(BaseModel):
+    """ESG (Environmental, Social, Governance) data model."""
+    total_risk_score: Optional[float] = None
+    risk_level: Optional[str] = None
+    environmental_risk_score: Optional[float] = None
+    environmental_risk_level: Optional[str] = None
+    social_risk_score: Optional[float] = None
+    social_risk_level: Optional[str] = None
+    governance_risk_score: Optional[float] = None
+    governance_risk_level: Optional[str] = None
+    controversy_level: Optional[int] = None
+    controversy_description: Optional[str] = None
+    peer_rank: Optional[str] = None
+    peer_percentile: Optional[float] = None
+
+
 class StockInfo(BaseModel):
     """Stock information data model."""
     symbol: str
@@ -36,6 +61,7 @@ class StockInfo(BaseModel):
     volume: Optional[int] = None
     sector: Optional[str] = None
     industry: Optional[str] = None
+    esg: Optional[ESGData] = None
 
 
 class HistoricalPrice(BaseModel):
@@ -147,48 +173,59 @@ class Portfolio(BaseModel):
 
 
 class EconomicIndicator(BaseModel):
-    """Economic indicator data."""
-    indicator: str
-    value: float
-    date: str
-    previous: float
-    change: float
-    change_percent: float
-
-
-class EconomicEvent(BaseModel):
-    """Economic calendar event."""
-    event: str
-    date: str
-    country: str
-    actual: Optional[str]
-    forecast: Optional[str]
-    previous: Optional[str]
-    importance: str
-
-
-class CryptoData(BaseModel):
-    """Cryptocurrency data."""
+    """Economic indicator data model."""
     symbol: str
     name: str
-    price: float
-    market_cap: float
-    volume_24h: float
-    change_24h: float
-    circulating_supply: float
-    max_supply: Optional[float]
+    current_value: float
+    change: float
+    change_percent: float
+    previous_close: float
+    open: float
+    day_high: float
+    day_low: float
+    volume: int
+    description: Optional[str] = None
+    category: Optional[str] = None
 
 
-class ESGScores(BaseModel):
-    """ESG (Environmental, Social, Governance) scores."""
+class MarketIndicators(BaseModel):
+    """Market indicators data collection."""
+    timestamp: str
+    major_indices: Dict[str, EconomicIndicator]
+    treasury_yields: Dict[str, EconomicIndicator]
+    commodities: Dict[str, EconomicIndicator]
+    forex: Dict[str, EconomicIndicator]
+    volatility: Dict[str, EconomicIndicator]
+
+
+class TechnicalIndicators(BaseModel):
+    """Technical analysis indicators data model."""
+    timestamp: str
     symbol: str
-    total_score: float
-    environmental_score: float
-    social_score: float
-    governance_score: float
-    controversy_level: int
-    peer_rank: str
-    peer_percentile: float
+    # Trend Indicators
+    sma_20: float
+    sma_50: float
+    sma_200: float
+    ema_12: float
+    ema_26: float
+    # Momentum Indicators
+    macd_line: float
+    macd_signal: float
+    macd_histogram: float
+    rsi_14: float
+    stoch_k: float
+    stoch_d: float
+    # Volatility Indicators
+    bollinger_upper: float
+    bollinger_middle: float
+    bollinger_lower: float
+    atr_14: float  # Average True Range
+    # Volume Indicators
+    obv: float  # On Balance Volume
+    mfi_14: float  # Money Flow Index
+    # Additional Indicators
+    williams_r: float  # Williams %R
+    cci_20: float  # Commodity Channel Index
 
 
 # Initialize FastMCP server
@@ -233,6 +270,22 @@ def format_currency(amount: Optional[float]) -> str:
         return f"${amount:.2f}"
 
 
+def determine_risk_level(score: Optional[float]) -> Optional[str]:
+    """Determine ESG risk level based on score."""
+    if score is None:
+        return None
+    if score < 10:
+        return ESGRiskLevel.NEGLIGIBLE
+    elif score < 20:
+        return ESGRiskLevel.LOW
+    elif score < 30:
+        return ESGRiskLevel.MEDIUM
+    elif score < 40:
+        return ESGRiskLevel.HIGH
+    else:
+        return ESGRiskLevel.SEVERE
+
+
 @yfinance_server.tool(
     name="get_stock_info",
     description="""Get comprehensive information about a stock or cryptocurrency.
@@ -263,6 +316,10 @@ async def get_stock_info(symbol: str) -> str:
         # Log available price fields
         price_fields = {k: v for k, v in info.items() if isinstance(v, (int, float)) and 'price' in k.lower()}
         logger.info(f"Available price fields for {symbol}: {json.dumps(price_fields, indent=2)}")
+        
+        # Log available ESG fields
+        esg_fields = {k: v for k, v in info.items() if any(esg_term in k.lower() for esg_term in ['esg', 'environmental', 'social', 'governance'])}
+        logger.info(f"Available ESG fields for {symbol}: {json.dumps(esg_fields, indent=2)}")
         
         # Check if it's a cryptocurrency
         is_crypto = "-USD" in symbol
@@ -310,6 +367,38 @@ async def get_stock_info(symbol: str) -> str:
                 week_52_low = float(yearly_hist["Low"].min())
                 logger.info(f"Got 52-week data from history for {symbol}: High={week_52_high}, Low={week_52_low}")
         
+        # Get ESG data
+        esg_data = None
+        if not is_crypto:  # ESG data is only relevant for stocks
+            total_risk_score = info.get("esgScore")
+            env_risk_score = info.get("environmentScore")
+            social_risk_score = info.get("socialScore")
+            gov_risk_score = info.get("governanceScore")
+            
+            if any([total_risk_score, env_risk_score, social_risk_score, gov_risk_score]):
+                esg_data = ESGData(
+                    total_risk_score=total_risk_score,
+                    risk_level=determine_risk_level(total_risk_score),
+                    environmental_risk_score=env_risk_score,
+                    environmental_risk_level=determine_risk_level(env_risk_score),
+                    social_risk_score=social_risk_score,
+                    social_risk_level=determine_risk_level(social_risk_score),
+                    governance_risk_score=gov_risk_score,
+                    governance_risk_level=determine_risk_level(gov_risk_score),
+                    controversy_level=info.get("controversyLevel"),
+                    controversy_description=info.get("controversyDescription"),
+                    peer_rank=info.get("esgPerformance"),
+                    peer_percentile=info.get("percentile")
+                )
+                
+                logger.info(
+                    f"ESG data for {symbol}:\n"
+                    f"Total Risk Score: {total_risk_score} ({determine_risk_level(total_risk_score)})\n"
+                    f"Environmental Risk: {env_risk_score} ({determine_risk_level(env_risk_score)})\n"
+                    f"Social Risk: {social_risk_score} ({determine_risk_level(social_risk_score)})\n"
+                    f"Governance Risk: {gov_risk_score} ({determine_risk_level(gov_risk_score)})"
+                )
+        
         stock_info = StockInfo(
             symbol=symbol,
             company_name=info.get("longName", ""),
@@ -321,7 +410,8 @@ async def get_stock_info(symbol: str) -> str:
             fifty_two_week_low=week_52_low,
             volume=volume,
             sector=None if is_crypto else info.get("sector"),
-            industry=None if is_crypto else info.get("industry")
+            industry=None if is_crypto else info.get("industry"),
+            esg=esg_data
         )
         
         return stock_info.model_dump_json(indent=2)
@@ -692,10 +782,14 @@ async def compare_stocks(symbols: List[str], metrics: Optional[List[str]] = None
 
 @yfinance_server.tool(
     name="get_market_summary",
-    description="""Get a summary of major market indices including S&P 500, Dow Jones, NASDAQ, Russell 2000, and VIX.
+    description="""Get a quick summary of major market indices and indicators.
     
-Args:
-    None
+Returns current values and changes for:
+- S&P 500
+- Dow Jones
+- NASDAQ
+- VIX
+- 10Y Treasury Yield
 """
 )
 async def get_market_summary() -> str:
@@ -705,8 +799,8 @@ async def get_market_summary() -> str:
             "^GSPC": "S&P 500",
             "^DJI": "Dow Jones",
             "^IXIC": "NASDAQ",
-            "^RUT": "Russell 2000",
-            "^VIX": "VIX"
+            "^VIX": "VIX",
+            "^TNX": "10Y Treasury"
         }
         
         summary_data = {}
@@ -714,21 +808,22 @@ async def get_market_summary() -> str:
         for symbol, name in indices.items():
             try:
                 ticker = yf.Ticker(symbol)
-                hist = ticker.history(period="2d")
+                info = ticker.info
                 
-                if not hist.empty:
-                    current = hist["Close"].iloc[-1]
-                    previous = hist["Close"].iloc[-2] if len(hist) > 1 else current
+                if info:
+                    current = info.get("regularMarketPrice", 0.0)
+                    previous = info.get("regularMarketPreviousClose", 0.0)
                     change = current - previous
-                    change_pct = (change / previous) * 100 if previous != 0 else 0
+                    change_percent = (change / previous * 100) if previous != 0 else 0
                     
                     summary_data[symbol] = MarketIndex(
                         name=name,
                         current_price=round(float(current), 2),
                         change=round(float(change), 2),
-                        change_percent=round(float(change_pct), 2),
-                        volume=int(hist["Volume"].iloc[-1]) if pd.notna(hist["Volume"].iloc[-1]) else 0
+                        change_percent=round(float(change_percent), 2),
+                        volume=info.get("regularMarketVolume", 0)
                     )
+                    logger.info(f"Got market data for {name}: {current} ({change_percent:+.2f}%)")
             except Exception as e:
                 logger.warning(f"Failed to get data for {symbol}: {e}")
                 continue
@@ -918,42 +1013,100 @@ async def analyze_portfolio(symbols: List[str], weights: Optional[List[float]] =
 
 @yfinance_server.tool(
     name="get_economic_indicators",
-    description="""Get major economic indicators.
+    description="""Get comprehensive economic indicators including major indices, treasury yields, commodities, forex, and volatility indices.
     
-Args:
-    indicators: List[str]
-        List of economic indicators to fetch (e.g., ["^TNX", "^VIX", "^DJI"])
+Returns real-time data for:
+- Major Indices (S&P 500, Dow Jones, NASDAQ, Russell 2000)
+- Treasury Yields (2Y, 5Y, 10Y, 30Y)
+- Commodities (Gold, Oil, Silver)
+- Forex (EUR/USD, GBP/USD, USD/JPY)
+- Volatility (VIX, VXN)
 """
 )
-async def get_economic_indicators(indicators: List[str]) -> str:
-    """Get major economic indicators."""
+async def get_economic_indicators() -> str:
+    """Get comprehensive economic indicators."""
     try:
-        results = []
-        for indicator in indicators:
-            try:
-                ticker = yf.Ticker(indicator)
-                hist = ticker.history(period="2d")
-                
-                if not hist.empty:
-                    current = hist['Close'].iloc[-1]
-                    previous = hist['Close'].iloc[-2] if len(hist) > 1 else current
-                    change = current - previous
-                    change_pct = (change / previous) * 100 if previous != 0 else 0
-                    
-                    indicator_data = EconomicIndicator(
-                        indicator=indicator,
-                        value=float(current),
-                        date=hist.index[-1].strftime("%Y-%m-%d"),
-                        previous=float(previous),
-                        change=float(change),
-                        change_percent=float(change_pct)
-                    )
-                    results.append(indicator_data)
-            except Exception as e:
-                logger.warning(f"Failed to get data for {indicator}: {e}")
-                continue
+        indicators = {
+            "major_indices": {
+                "^GSPC": ("S&P 500", "Major US Stock Market Index"),
+                "^DJI": ("Dow Jones Industrial Average", "Blue-chip US Stock Index"),
+                "^IXIC": ("NASDAQ Composite", "Tech-heavy US Stock Index"),
+                "^RUT": ("Russell 2000", "Small-cap US Stock Index")
+            },
+            "treasury_yields": {
+                "^TNX": ("10-Year Treasury Yield", "US 10 Year Treasury Yield"),
+                "^IRX": ("13-Week Treasury Bill", "US 13 Week Treasury Bill Yield"),
+                "^TYX": ("30-Year Treasury Yield", "US 30 Year Treasury Yield"),
+                "^FVX": ("5-Year Treasury Yield", "US 5 Year Treasury Yield")
+            },
+            "commodities": {
+                "GC=F": ("Gold Futures", "Gold Futures Price"),
+                "CL=F": ("Crude Oil Futures", "WTI Crude Oil Futures Price"),
+                "SI=F": ("Silver Futures", "Silver Futures Price")
+            },
+            "forex": {
+                "EURUSD=X": ("EUR/USD", "Euro to US Dollar Exchange Rate"),
+                "GBPUSD=X": ("GBP/USD", "British Pound to US Dollar Exchange Rate"),
+                "JPY=X": ("USD/JPY", "US Dollar to Japanese Yen Exchange Rate")
+            },
+            "volatility": {
+                "^VIX": ("VIX", "CBOE Volatility Index"),
+                "^VXN": ("VXN", "NASDAQ 100 Volatility Index")
+            }
+        }
         
-        return json.dumps([ind.model_dump() for ind in results], indent=2)
+        result = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "major_indices": {},
+            "treasury_yields": {},
+            "commodities": {},
+            "forex": {},
+            "volatility": {}
+        }
+        
+        for category, symbols in indicators.items():
+            for symbol, (name, description) in symbols.items():
+                try:
+                    ticker = yf.Ticker(symbol)
+                    info = ticker.info
+                    
+                    if info:
+                        current = info.get("regularMarketPrice", 0.0)
+                        previous = info.get("regularMarketPreviousClose", 0.0)
+                        change = current - previous
+                        change_percent = (change / previous * 100) if previous != 0 else 0
+                        
+                        indicator = EconomicIndicator(
+                            symbol=symbol,
+                            name=name,
+                            current_value=current,
+                            change=round(change, 2),
+                            change_percent=round(change_percent, 2),
+                            previous_close=previous,
+                            open=info.get("regularMarketOpen", 0.0),
+                            day_high=info.get("regularMarketDayHigh", 0.0),
+                            day_low=info.get("regularMarketDayLow", 0.0),
+                            volume=info.get("regularMarketVolume", 0),
+                            description=description,
+                            category=category
+                        )
+                        
+                        result[category][symbol] = indicator
+                        logger.info(f"Got {category} data for {name}: {current} ({change_percent:+.2f}%)")
+                except Exception as e:
+                    logger.warning(f"Failed to get data for {symbol}: {e}")
+                    continue
+        
+        market_indicators = MarketIndicators(
+            timestamp=result["timestamp"],
+            major_indices=result["major_indices"],
+            treasury_yields=result["treasury_yields"],
+            commodities=result["commodities"],
+            forex=result["forex"],
+            volatility=result["volatility"]
+        )
+        
+        return market_indicators.model_dump_json(indent=2)
     except Exception as e:
         logger.error(f"Error getting economic indicators: {e}")
         return f"Failed to retrieve economic indicators: {str(e)}"
@@ -1103,6 +1256,166 @@ async def debug_symbol_data(symbol: str) -> str:
         return json.dumps(debug_info, indent=2)
     except Exception as e:
         return f"Debug error: {str(e)}"
+
+
+def calculate_technical_indicators(data: pd.DataFrame) -> Dict[str, float]:
+    """Calculate technical analysis indicators."""
+    if data.empty:
+        return {}
+
+    try:
+        # Prepare data
+        df = data.copy()
+        df['Typical'] = (df['High'] + df['Low'] + df['Close']) / 3
+        
+        # Calculate SMAs
+        df['SMA_20'] = df['Close'].rolling(window=20).mean()
+        df['SMA_50'] = df['Close'].rolling(window=50).mean()
+        df['SMA_200'] = df['Close'].rolling(window=200).mean()
+        
+        # Calculate EMAs for MACD
+        df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
+        df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
+        
+        # Calculate MACD
+        df['MACD_Line'] = df['EMA_12'] - df['EMA_26']
+        df['MACD_Signal'] = df['MACD_Line'].ewm(span=9, adjust=False).mean()
+        df['MACD_Hist'] = df['MACD_Line'] - df['MACD_Signal']
+        
+        # Calculate RSI
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df['RSI_14'] = 100 - (100 / (1 + rs))
+        
+        # Calculate Stochastic Oscillator
+        low_14 = df['Low'].rolling(window=14).min()
+        high_14 = df['High'].rolling(window=14).max()
+        df['STOCH_K'] = 100 * ((df['Close'] - low_14) / (high_14 - low_14))
+        df['STOCH_D'] = df['STOCH_K'].rolling(window=3).mean()
+        
+        # Calculate Bollinger Bands
+        df['BB_Middle'] = df['Close'].rolling(window=20).mean()
+        bb_std = df['Close'].rolling(window=20).std()
+        df['BB_Upper'] = df['BB_Middle'] + (bb_std * 2)
+        df['BB_Lower'] = df['BB_Middle'] - (bb_std * 2)
+        
+        # Calculate ATR
+        df['TR'] = pd.DataFrame({
+            'HL': df['High'] - df['Low'],
+            'HC': abs(df['High'] - df['Close'].shift(1)),
+            'LC': abs(df['Low'] - df['Close'].shift(1))
+        }).max(axis=1)
+        df['ATR_14'] = df['TR'].rolling(window=14).mean()
+        
+        # Calculate OBV (On Balance Volume)
+        df['OBV'] = (np.sign(df['Close'].diff()) * df['Volume']).fillna(0).cumsum()
+        
+        # Calculate MFI (Money Flow Index)
+        typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+        raw_money_flow = typical_price * df['Volume']
+        positive_flow = pd.Series(np.where(typical_price > typical_price.shift(1), raw_money_flow, 0))
+        negative_flow = pd.Series(np.where(typical_price < typical_price.shift(1), raw_money_flow, 0))
+        positive_mf = positive_flow.rolling(window=14).sum()
+        negative_mf = negative_flow.rolling(window=14).sum()
+        mfi = 100 - (100 / (1 + (positive_mf / negative_mf)))
+        df['MFI_14'] = mfi
+        
+        # Calculate Williams %R
+        highest_high = df['High'].rolling(window=14).max()
+        lowest_low = df['Low'].rolling(window=14).min()
+        df['Williams_R'] = ((highest_high - df['Close']) / (highest_high - lowest_low)) * -100
+        
+        # Calculate CCI (Commodity Channel Index)
+        tp = (df['High'] + df['Low'] + df['Close']) / 3
+        tp_sma = tp.rolling(window=20).mean()
+        mad = tp.rolling(window=20).apply(lambda x: pd.Series(x).mad())
+        df['CCI_20'] = (tp - tp_sma) / (0.015 * mad)
+        
+        # Get the latest values
+        latest = df.iloc[-1]
+        return {
+            'sma_20': latest['SMA_20'],
+            'sma_50': latest['SMA_50'],
+            'sma_200': latest['SMA_200'],
+            'ema_12': latest['EMA_12'],
+            'ema_26': latest['EMA_26'],
+            'macd_line': latest['MACD_Line'],
+            'macd_signal': latest['MACD_Signal'],
+            'macd_histogram': latest['MACD_Hist'],
+            'rsi_14': latest['RSI_14'],
+            'stoch_k': latest['STOCH_K'],
+            'stoch_d': latest['STOCH_D'],
+            'bollinger_upper': latest['BB_Upper'],
+            'bollinger_middle': latest['BB_Middle'],
+            'bollinger_lower': latest['BB_Lower'],
+            'atr_14': latest['ATR_14'],
+            'obv': latest['OBV'],
+            'mfi_14': latest['MFI_14'],
+            'williams_r': latest['Williams_R'],
+            'cci_20': latest['CCI_20']
+        }
+    except Exception as e:
+        logger.error(f"Error calculating technical indicators: {e}")
+        return {}
+
+
+@yfinance_server.tool(
+    name="get_technical_analysis",
+    description="""Get comprehensive technical analysis indicators for a stock.
+    
+Args:
+    symbol: str
+        Stock ticker symbol (e.g., "AAPL", "MSFT", "GOOGL")
+    interval: str
+        Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo)
+        Default: "1d"
+    period: str
+        Data period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
+        Default: "6mo"
+"""
+)
+async def get_technical_analysis(
+    symbol: str,
+    interval: str = "1d",
+    period: str = "6mo"
+) -> str:
+    """Get technical analysis indicators for a stock."""
+    try:
+        symbol = validate_symbol(symbol)
+        stock = yf.Ticker(symbol)
+        
+        # Get historical data for calculations
+        hist = stock.history(period=period, interval=interval)
+        if hist.empty:
+            return f"No historical data found for {symbol}"
+        
+        # Calculate indicators
+        indicators = calculate_technical_indicators(hist)
+        if not indicators:
+            return f"Failed to calculate indicators for {symbol}"
+        
+        # Create technical analysis response
+        technical_data = TechnicalIndicators(
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            symbol=symbol,
+            **indicators
+        )
+        
+        # Log indicator values
+        logger.info(
+            f"Technical Analysis for {symbol}:\n"
+            f"MACD: {indicators['macd_line']:.2f} (Signal: {indicators['macd_signal']:.2f}, Hist: {indicators['macd_histogram']:.2f})\n"
+            f"RSI: {indicators['rsi_14']:.2f}\n"
+            f"Stochastic: %K={indicators['stoch_k']:.2f}, %D={indicators['stoch_d']:.2f}\n"
+            f"Bollinger Bands: Upper={indicators['bollinger_upper']:.2f}, Middle={indicators['bollinger_middle']:.2f}, Lower={indicators['bollinger_lower']:.2f}"
+        )
+        
+        return technical_data.model_dump_json(indent=2)
+    except Exception as e:
+        logger.error(f"Error getting technical analysis for {symbol}: {e}")
+        return f"Failed to retrieve technical analysis: {str(e)}"
 
 
 def main():
