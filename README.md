@@ -155,3 +155,9 @@ Once connected, you can ask Claude things like:
 - "Analyze AAPL's balance sheet metrics and trends"
 - "Show me GOOGL's cash flow analysis"
 - "What are the key financial ratios for NVDA?"
+
+### Example Outputs
+
+![Who are the major institutional holders of AAPL?](./examples/ex1_yf.png)
+
+![Show me GOOGL's cash flow analysis](./examples/ex2_yf.png)
