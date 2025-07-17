@@ -50,6 +50,59 @@ class ESGData(BaseModel):
 
 class StockInfo(BaseModel):
     """Stock information data model."""
+    """Yahoo Finance Server
+
+A financial data analysis server inspired by the Model Context Protocol,
+providing comprehensive Yahoo Finance data through a clean API.
+"""
+
+import asyncio
+import json
+import logging
+import os
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union
+from enum import Enum
+
+import yfinance as yf
+import pandas as pd
+import numpy as np
+from pydantic import BaseModel, Field
+from fastmcp import FastMCP
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize FastMCP server
+yfinance_server = FastMCP(
+    "yahoo-finance",
+    instructions="""
+# Yahoo Finance MCP Server
+
+This server provides comprehensive financial data from Yahoo Finance.
+
+Available tools:
+- get_stock_info: Get comprehensive stock information including price, market cap, financial metrics
+- get_historical_prices: Get historical price data with customizable periods and intervals
+- get_financial_statements: Get financial statements (income, balance sheet, cash flow)
+- get_stock_news: Get latest news articles for a stock
+- get_analyst_recommendations: Get analyst recommendations and recent changes
+- get_options_data: Get options data including calls and puts
+- compare_stocks: Compare multiple stocks across various metrics
+- get_market_summary: Get summary of major market indices
+- get_holder_info: Get information about major holders, institutional investors, and insider trades
+- get_earnings_info: Get earnings dates, estimates, history, and trends
+- get_dividend_info: Get dividend rates, yield, history, and next payment date
+- get_balance_sheet_analysis: Get detailed balance sheet analysis with key ratios and trends
+- get_cash_flow_analysis: Get comprehensive cash flow analysis and metrics
+- get_financial_ratios: Get key financial ratios across multiple categories
+"""
+)
+
+
+class StockInfo(BaseModel):
+    """Stock information data model."""
     symbol: str
     company_name: str = ""
     current_price: float = 0.0
@@ -61,7 +114,6 @@ class StockInfo(BaseModel):
     volume: Optional[int] = None
     sector: Optional[str] = None
     industry: Optional[str] = None
-    esg: Optional[ESGData] = None
 
 
 class HistoricalPrice(BaseModel):
@@ -144,25 +196,6 @@ class AnalystRecommendation(BaseModel):
     recent_changes: List[Dict[str, Any]]
 
 
-class TechnicalIndicator(BaseModel):
-    """Technical indicator data."""
-    symbol: str
-    date: str
-    sma_50: Optional[float] = None
-    sma_200: Optional[float] = None
-    ema_12: Optional[float] = None
-    ema_26: Optional[float] = None
-    macd: Optional[float] = None
-    macd_signal: Optional[float] = None
-    macd_hist: Optional[float] = None
-    rsi_14: Optional[float] = None
-    bollinger_upper: Optional[float] = None
-    bollinger_middle: Optional[float] = None
-    bollinger_lower: Optional[float] = None
-    stoch_k: Optional[float] = None
-    stoch_d: Optional[float] = None
-
-
 class Portfolio(BaseModel):
     """Portfolio data."""
     total_value: float
@@ -198,55 +231,140 @@ class MarketIndicators(BaseModel):
     volatility: Dict[str, EconomicIndicator]
 
 
-class TechnicalIndicators(BaseModel):
-    """Technical analysis indicators data model."""
-    timestamp: str
+class EarningsInfo(BaseModel):
+    """Earnings information data model."""
     symbol: str
-    # Trend Indicators
-    sma_20: float
-    sma_50: float
-    sma_200: float
-    ema_12: float
-    ema_26: float
-    # Momentum Indicators
-    macd_line: float
-    macd_signal: float
-    macd_histogram: float
-    rsi_14: float
-    stoch_k: float
-    stoch_d: float
-    # Volatility Indicators
-    bollinger_upper: float
-    bollinger_middle: float
-    bollinger_lower: float
-    atr_14: float  # Average True Range
-    # Volume Indicators
-    obv: float  # On Balance Volume
-    mfi_14: float  # Money Flow Index
-    # Additional Indicators
-    williams_r: float  # Williams %R
-    cci_20: float  # Commodity Channel Index
+    next_earnings_date: Optional[str] = None
+    eps_estimate: Optional[float] = None
+    eps_actual: Optional[float] = None
+    revenue_estimate: Optional[float] = None
+    revenue_actual: Optional[float] = None
+    earnings_history: List[Dict[str, Any]] = []
+    earnings_trend: List[Dict[str, Any]] = []
 
 
-# Initialize FastMCP server
-yfinance_server = FastMCP(
-    "yahoo-finance",
-    instructions="""
-# Yahoo Finance MCP Server
+class DividendInfo(BaseModel):
+    """Dividend information data model."""
+    symbol: str
+    dividend_rate: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    payout_ratio: Optional[float] = None
+    five_year_avg_dividend_yield: Optional[float] = None
+    dividend_history: List[Dict[str, Any]] = []
+    next_dividend_date: Optional[str] = None
 
-This server provides comprehensive financial data from Yahoo Finance.
 
-Available tools:
-- get_stock_info: Get comprehensive stock information including price, market cap, financial metrics
-- get_historical_prices: Get historical price data with customizable periods and intervals
-- get_financial_statements: Get financial statements (income, balance sheet, cash flow)
-- get_stock_news: Get latest news articles for a stock
-- get_analyst_recommendations: Get analyst recommendations and recent changes
-- get_options_data: Get options data including calls and puts
-- compare_stocks: Compare multiple stocks across various metrics
-- get_market_summary: Get summary of major market indices
+class BalanceSheetAnalysis(BaseModel):
+    """Balance sheet analysis data model."""
+    symbol: str
+    total_assets: Optional[float] = None
+    total_liabilities: Optional[float] = None
+    total_equity: Optional[float] = None
+    current_ratio: Optional[float] = None
+    quick_ratio: Optional[float] = None
+    debt_to_equity: Optional[float] = None
+    working_capital: Optional[float] = None
+    asset_turnover: Optional[float] = None
+    quarterly_trends: List[Dict[str, Any]] = []
+
+
+class CashFlowAnalysis(BaseModel):
+    """Cash flow analysis data model."""
+    symbol: str
+    operating_cash_flow: Optional[float] = None
+    investing_cash_flow: Optional[float] = None
+    financing_cash_flow: Optional[float] = None
+    free_cash_flow: Optional[float] = None
+    cash_flow_coverage: Optional[float] = None
+    capital_expenditure: Optional[float] = None
+    quarterly_trends: List[Dict[str, Any]] = []
+
+
+class FinancialRatios(BaseModel):
+    """Financial ratios data model."""
+    symbol: str
+    profitability: Dict[str, Optional[float]] = {}  # ROE, ROA, Profit Margin
+    liquidity: Dict[str, Optional[float]] = {}      # Current, Quick, Cash Ratio
+    solvency: Dict[str, Optional[float]] = {}       # Debt/Equity, Interest Coverage
+    efficiency: Dict[str, Optional[float]] = {}     # Asset Turnover, Inventory Turnover
+    valuation: Dict[str, Optional[float]] = {}      # P/E, P/B, EV/EBITDA
+    growth: Dict[str, Optional[float]] = {}         # Revenue, EPS Growth
+
+
+class HolderType(str, Enum):
+    """Holder type enumeration."""
+    major_holders = "major_holders"
+    institutional_holders = "institutional_holders"
+    mutualfund_holders = "mutualfund_holders"
+    insider_transactions = "insider_transactions"
+    insider_purchases = "insider_purchases"
+    insider_roster_holders = "insider_roster_holders"
+
+
+@yfinance_server.tool(
+    name="get_holder_info",
+    description="""Get holder information for a given stock.
+    
+Args:
+    symbol: str
+        Stock ticker symbol (e.g., "AAPL", "MSFT", "GOOGL")
+    holder_type: str
+        Type of holder information to retrieve:
+        - major_holders: Major shareholders
+        - institutional_holders: Institutional investors
+        - mutualfund_holders: Mutual fund holders
+        - insider_transactions: Recent insider trades
+        - insider_purchases: Recent insider purchases
+        - insider_roster_holders: Insider roster information
 """
 )
+async def get_holder_info(symbol: str, holder_type: str) -> str:
+    """Get holder information for a given ticker symbol."""
+    try:
+        symbol = validate_symbol(symbol)
+        company = yf.Ticker(symbol)
+        
+        # Verify company exists
+        try:
+            if company.isin is None:
+                return f"Company ticker {symbol} not found."
+        except Exception as e:
+            logger.error(f"Error getting holder info for {symbol}: {e}")
+            return f"Error getting holder info for {symbol}: {e}"
+
+        # Get appropriate holder data based on type
+        if holder_type == HolderType.major_holders:
+            holders = company.major_holders
+            if holders is not None and not holders.empty:
+                return holders.reset_index(names="metric").to_json(orient="records")
+        elif holder_type == HolderType.institutional_holders:
+            holders = company.institutional_holders
+            if holders is not None and not holders.empty:
+                return holders.to_json(orient="records")
+        elif holder_type == HolderType.mutualfund_holders:
+            holders = company.mutualfund_holders
+            if holders is not None and not holders.empty:
+                return holders.to_json(orient="records", date_format="iso")
+        elif holder_type == HolderType.insider_transactions:
+            holders = company.insider_transactions
+            if holders is not None and not holders.empty:
+                return holders.to_json(orient="records", date_format="iso")
+        elif holder_type == HolderType.insider_purchases:
+            holders = company.insider_purchases
+            if holders is not None and not holders.empty:
+                return holders.to_json(orient="records", date_format="iso")
+        elif holder_type == HolderType.insider_roster_holders:
+            holders = company.insider_roster_holders
+            if holders is not None and not holders.empty:
+                return holders.to_json(orient="records", date_format="iso")
+        else:
+            return f"Invalid holder type {holder_type}. Please use one of: {', '.join(HolderType.__members__.keys())}"
+            
+        return f"No {holder_type} data available for {symbol}"
+        
+    except Exception as e:
+        logger.error(f"Error getting holder info for {symbol}: {e}")
+        return f"Failed to retrieve holder information: {str(e)}"
 
 
 def validate_symbol(symbol: str) -> str:
@@ -270,22 +388,6 @@ def format_currency(amount: Optional[float]) -> str:
         return f"${amount:.2f}"
 
 
-def determine_risk_level(score: Optional[float]) -> Optional[str]:
-    """Determine ESG risk level based on score."""
-    if score is None:
-        return None
-    if score < 10:
-        return ESGRiskLevel.NEGLIGIBLE
-    elif score < 20:
-        return ESGRiskLevel.LOW
-    elif score < 30:
-        return ESGRiskLevel.MEDIUM
-    elif score < 40:
-        return ESGRiskLevel.HIGH
-    else:
-        return ESGRiskLevel.SEVERE
-
-
 @yfinance_server.tool(
     name="get_stock_info",
     description="""Get comprehensive information about a stock or cryptocurrency.
@@ -293,6 +395,7 @@ def determine_risk_level(score: Optional[float]) -> Optional[str]:
 Args:
     symbol: str
         Stock ticker symbol (e.g., "AAPL", "MSFT") or crypto symbol (e.g., "BTC-USD", "ETH-USD")
+        For cryptocurrencies, use the format: "BTC-USD", "ETH-USD", "DOGE-USD", etc.
 """
 )
 async def get_stock_info(symbol: str) -> str:
@@ -316,10 +419,6 @@ async def get_stock_info(symbol: str) -> str:
         # Log available price fields
         price_fields = {k: v for k, v in info.items() if isinstance(v, (int, float)) and 'price' in k.lower()}
         logger.info(f"Available price fields for {symbol}: {json.dumps(price_fields, indent=2)}")
-        
-        # Log available ESG fields
-        esg_fields = {k: v for k, v in info.items() if any(esg_term in k.lower() for esg_term in ['esg', 'environmental', 'social', 'governance'])}
-        logger.info(f"Available ESG fields for {symbol}: {json.dumps(esg_fields, indent=2)}")
         
         # Check if it's a cryptocurrency
         is_crypto = "-USD" in symbol
@@ -367,38 +466,6 @@ async def get_stock_info(symbol: str) -> str:
                 week_52_low = float(yearly_hist["Low"].min())
                 logger.info(f"Got 52-week data from history for {symbol}: High={week_52_high}, Low={week_52_low}")
         
-        # Get ESG data
-        esg_data = None
-        if not is_crypto:  # ESG data is only relevant for stocks
-            total_risk_score = info.get("esgScore")
-            env_risk_score = info.get("environmentScore")
-            social_risk_score = info.get("socialScore")
-            gov_risk_score = info.get("governanceScore")
-            
-            if any([total_risk_score, env_risk_score, social_risk_score, gov_risk_score]):
-                esg_data = ESGData(
-                    total_risk_score=total_risk_score,
-                    risk_level=determine_risk_level(total_risk_score),
-                    environmental_risk_score=env_risk_score,
-                    environmental_risk_level=determine_risk_level(env_risk_score),
-                    social_risk_score=social_risk_score,
-                    social_risk_level=determine_risk_level(social_risk_score),
-                    governance_risk_score=gov_risk_score,
-                    governance_risk_level=determine_risk_level(gov_risk_score),
-                    controversy_level=info.get("controversyLevel"),
-                    controversy_description=info.get("controversyDescription"),
-                    peer_rank=info.get("esgPerformance"),
-                    peer_percentile=info.get("percentile")
-                )
-                
-                logger.info(
-                    f"ESG data for {symbol}:\n"
-                    f"Total Risk Score: {total_risk_score} ({determine_risk_level(total_risk_score)})\n"
-                    f"Environmental Risk: {env_risk_score} ({determine_risk_level(env_risk_score)})\n"
-                    f"Social Risk: {social_risk_score} ({determine_risk_level(social_risk_score)})\n"
-                    f"Governance Risk: {gov_risk_score} ({determine_risk_level(gov_risk_score)})"
-                )
-        
         stock_info = StockInfo(
             symbol=symbol,
             company_name=info.get("longName", ""),
@@ -410,8 +477,7 @@ async def get_stock_info(symbol: str) -> str:
             fifty_two_week_low=week_52_low,
             volume=volume,
             sector=None if is_crypto else info.get("sector"),
-            industry=None if is_crypto else info.get("industry"),
-            esg=esg_data
+            industry=None if is_crypto else info.get("industry")
         )
         
         return stock_info.model_dump_json(indent=2)
@@ -543,7 +609,7 @@ async def get_financial_statements(symbol: str, statement_type: str = "income_st
 
 @yfinance_server.tool(
     name="get_stock_news",
-    description="""Get latest news articles for a stock from Yahoo Finance.
+    description="""Get latest news articles for a stock.
     
 Args:
     symbol: str
@@ -839,583 +905,399 @@ async def get_market_summary() -> str:
         return f"Failed to retrieve market summary: {str(e)}"
 
 
-def calculate_technical_indicators(data: pd.DataFrame) -> Dict[str, float]:
-    """Calculate technical indicators from price data."""
-    if data.empty:
-        return {}
-    
-    # Calculate SMAs
-    sma_50 = data['Close'].rolling(window=50).mean().iloc[-1]
-    sma_200 = data['Close'].rolling(window=200).mean().iloc[-1]
-    
-    # Calculate EMAs for MACD
-    ema_12 = data['Close'].ewm(span=12, adjust=False).mean()
-    ema_26 = data['Close'].ewm(span=26, adjust=False).mean()
-    macd = ema_12 - ema_26
-    macd_signal = macd.ewm(span=9, adjust=False).mean()
-    macd_hist = macd - macd_signal
-    
-    # Calculate RSI
-    delta = data['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    
-    # Calculate Bollinger Bands
-    middle_band = data['Close'].rolling(window=20).mean()
-    std_dev = data['Close'].rolling(window=20).std()
-    upper_band = middle_band + (std_dev * 2)
-    lower_band = middle_band - (std_dev * 2)
-    
-    # Calculate Stochastic Oscillator
-    low_14 = data['Low'].rolling(window=14).min()
-    high_14 = data['High'].rolling(window=14).max()
-    k = 100 * ((data['Close'] - low_14) / (high_14 - low_14))
-    d = k.rolling(window=3).mean()
-    
-    return {
-        'sma_50': sma_50,
-        'sma_200': sma_200,
-        'ema_12': ema_12.iloc[-1],
-        'ema_26': ema_26.iloc[-1],
-        'macd': macd.iloc[-1],
-        'macd_signal': macd_signal.iloc[-1],
-        'macd_hist': macd_hist.iloc[-1],
-        'rsi_14': rsi.iloc[-1],
-        'bollinger_upper': upper_band.iloc[-1],
-        'bollinger_middle': middle_band.iloc[-1],
-        'bollinger_lower': lower_band.iloc[-1],
-        'stoch_k': k.iloc[-1],
-        'stoch_d': d.iloc[-1]
-    }
-
-
 @yfinance_server.tool(
-    name="get_technical_indicators",
-    description="""Get technical analysis indicators for a stock.
+    name="get_earnings_info",
+    description="""Get earnings information for a stock including dates, estimates, and history.
     
 Args:
     symbol: str
         Stock ticker symbol (e.g., "AAPL", "MSFT", "GOOGL")
-    interval: str
-        Data interval (1d, 5d, 1wk, 1mo, 3mo)
-        Default: "1d"
 """
 )
-async def get_technical_indicators(symbol: str, interval: str = "1d") -> str:
-    """Get technical analysis indicators for a stock."""
+async def get_earnings_info(symbol: str) -> str:
+    """Get earnings information for a stock."""
     try:
         symbol = validate_symbol(symbol)
         stock = yf.Ticker(symbol)
         
-        # Get historical data for calculations
-        hist = stock.history(period="1y", interval=interval)
+        # Get earnings data
+        calendar = stock.calendar
+        earnings = stock.earnings
+        earnings_dates = stock.earnings_dates
+        earnings_trend = stock.earnings_trend
         
-        if hist.empty:
-            return f"No data found for {symbol}"
-        
-        # Calculate indicators
-        indicators = calculate_technical_indicators(hist)
-        
-        technical_data = TechnicalIndicator(
-            symbol=symbol,
-            date=hist.index[-1].strftime("%Y-%m-%d"),
-            **indicators
-        )
-        
-        return technical_data.model_dump_json(indent=2)
-    except Exception as e:
-        logger.error(f"Error getting technical indicators for {symbol}: {e}")
-        return f"Failed to retrieve technical indicators: {str(e)}"
-
-
-@yfinance_server.tool(
-    name="analyze_portfolio",
-    description="""Analyze a portfolio of stocks.
-    
-Args:
-    symbols: List[str]
-        List of stock ticker symbols in the portfolio
-    weights: Optional[List[float]]
-        Portfolio weights for each stock (must sum to 1)
-        If not provided, equal weights will be used
-"""
-)
-async def analyze_portfolio(symbols: List[str], weights: Optional[List[float]] = None) -> str:
-    """Analyze a portfolio of stocks."""
-    try:
-        if not symbols:
-            return "At least one symbol must be provided"
-        
-        # Use equal weights if not provided
-        if weights is None:
-            weights = [1.0 / len(symbols)] * len(symbols)
-        
-        if len(weights) != len(symbols):
-            return "Number of weights must match number of symbols"
-        
-        if abs(sum(weights) - 1.0) > 0.0001:
-            return "Weights must sum to 1"
-        
-        portfolio_data = {
-            'total_value': 0.0,
-            'cash': 0.0,
-            'stocks': {},
-            'performance': {},
-            'risk_metrics': {}
+        # Initialize earnings info
+        earnings_info = {
+            "symbol": symbol,
+            "next_earnings_date": None,
+            "eps_estimate": None,
+            "eps_actual": None,
+            "revenue_estimate": None,
+            "revenue_actual": None,
+            "earnings_history": [],
+            "earnings_trend": []
         }
         
-        returns_data = []
-        
-        # Get data for each stock
-        for symbol, weight in zip(symbols, weights):
-            stock = yf.Ticker(symbol)
-            hist = stock.history(period="1y")
-            
-            if not hist.empty:
-                current_price = hist['Close'].iloc[-1]
-                returns = hist['Close'].pct_change().dropna()
-                returns_data.append(returns * weight)
-                
-                portfolio_data['stocks'][symbol] = {
-                    'weight': weight,
-                    'current_price': current_price,
-                    'shares': weight * 100000 / current_price,  # Assuming $100,000 portfolio
-                    'value': weight * 100000
-                }
-        
-        # Calculate portfolio metrics
-        if returns_data:
-            portfolio_returns = pd.concat(returns_data, axis=1).sum(axis=1)
-            portfolio_data['performance'] = {
-                'total_return': float(((1 + portfolio_returns).prod() - 1) * 100),
-                'annual_return': float(((1 + portfolio_returns).prod() ** (252/len(portfolio_returns)) - 1) * 100),
-                'volatility': float(portfolio_returns.std() * np.sqrt(252) * 100),
-                'sharpe_ratio': float(portfolio_returns.mean() / portfolio_returns.std() * np.sqrt(252))
-            }
-            
-            portfolio_data['risk_metrics'] = {
-                'max_drawdown': float(((1 + portfolio_returns).cumprod().div((1 + portfolio_returns).cumprod().cummax()) - 1).min() * 100),
-                'var_95': float(portfolio_returns.quantile(0.05) * 100),
-                'var_99': float(portfolio_returns.quantile(0.01) * 100),
-                'beta': float(portfolio_returns.cov(portfolio_returns) / portfolio_returns.var())
-            }
-        
-        portfolio_data['total_value'] = sum(stock['value'] for stock in portfolio_data['stocks'].values())
-        
-        portfolio = Portfolio(**portfolio_data)
-        return portfolio.model_dump_json(indent=2)
-    except Exception as e:
-        logger.error(f"Error analyzing portfolio: {e}")
-        return f"Failed to analyze portfolio: {str(e)}"
-
-
-@yfinance_server.tool(
-    name="get_economic_indicators",
-    description="""Get comprehensive economic indicators including major indices, treasury yields, commodities, forex, and volatility indices.
-    
-Returns real-time data for:
-- Major Indices (S&P 500, Dow Jones, NASDAQ, Russell 2000)
-- Treasury Yields (2Y, 5Y, 10Y, 30Y)
-- Commodities (Gold, Oil, Silver)
-- Forex (EUR/USD, GBP/USD, USD/JPY)
-- Volatility (VIX, VXN)
-"""
-)
-async def get_economic_indicators() -> str:
-    """Get comprehensive economic indicators."""
-    try:
-        indicators = {
-            "major_indices": {
-                "^GSPC": ("S&P 500", "Major US Stock Market Index"),
-                "^DJI": ("Dow Jones Industrial Average", "Blue-chip US Stock Index"),
-                "^IXIC": ("NASDAQ Composite", "Tech-heavy US Stock Index"),
-                "^RUT": ("Russell 2000", "Small-cap US Stock Index")
-            },
-            "treasury_yields": {
-                "^TNX": ("10-Year Treasury Yield", "US 10 Year Treasury Yield"),
-                "^IRX": ("13-Week Treasury Bill", "US 13 Week Treasury Bill Yield"),
-                "^TYX": ("30-Year Treasury Yield", "US 30 Year Treasury Yield"),
-                "^FVX": ("5-Year Treasury Yield", "US 5 Year Treasury Yield")
-            },
-            "commodities": {
-                "GC=F": ("Gold Futures", "Gold Futures Price"),
-                "CL=F": ("Crude Oil Futures", "WTI Crude Oil Futures Price"),
-                "SI=F": ("Silver Futures", "Silver Futures Price")
-            },
-            "forex": {
-                "EURUSD=X": ("EUR/USD", "Euro to US Dollar Exchange Rate"),
-                "GBPUSD=X": ("GBP/USD", "British Pound to US Dollar Exchange Rate"),
-                "JPY=X": ("USD/JPY", "US Dollar to Japanese Yen Exchange Rate")
-            },
-            "volatility": {
-                "^VIX": ("VIX", "CBOE Volatility Index"),
-                "^VXN": ("VXN", "NASDAQ 100 Volatility Index")
-            }
-        }
-        
-        result = {
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "major_indices": {},
-            "treasury_yields": {},
-            "commodities": {},
-            "forex": {},
-            "volatility": {}
-        }
-        
-        for category, symbols in indicators.items():
-            for symbol, (name, description) in symbols.items():
-                try:
-                    ticker = yf.Ticker(symbol)
-                    info = ticker.info
-                    
-                    if info:
-                        current = info.get("regularMarketPrice", 0.0)
-                        previous = info.get("regularMarketPreviousClose", 0.0)
-                        change = current - previous
-                        change_percent = (change / previous * 100) if previous != 0 else 0
-                        
-                        indicator = EconomicIndicator(
-                            symbol=symbol,
-                            name=name,
-                            current_value=current,
-                            change=round(change, 2),
-                            change_percent=round(change_percent, 2),
-                            previous_close=previous,
-                            open=info.get("regularMarketOpen", 0.0),
-                            day_high=info.get("regularMarketDayHigh", 0.0),
-                            day_low=info.get("regularMarketDayLow", 0.0),
-                            volume=info.get("regularMarketVolume", 0),
-                            description=description,
-                            category=category
-                        )
-                        
-                        result[category][symbol] = indicator
-                        logger.info(f"Got {category} data for {name}: {current} ({change_percent:+.2f}%)")
-                except Exception as e:
-                    logger.warning(f"Failed to get data for {symbol}: {e}")
-                    continue
-        
-        market_indicators = MarketIndicators(
-            timestamp=result["timestamp"],
-            major_indices=result["major_indices"],
-            treasury_yields=result["treasury_yields"],
-            commodities=result["commodities"],
-            forex=result["forex"],
-            volatility=result["volatility"]
-        )
-        
-        return market_indicators.model_dump_json(indent=2)
-    except Exception as e:
-        logger.error(f"Error getting economic indicators: {e}")
-        return f"Failed to retrieve economic indicators: {str(e)}"
-
-
-@yfinance_server.tool(
-    name="get_crypto_data",
-    description="""Get cryptocurrency data.
-    
-Args:
-    symbols: List[str]
-        List of cryptocurrency symbols (e.g., ["BTC-USD", "ETH-USD", "DOGE-USD"])
-"""
-)
-async def get_crypto_data(symbols: List[str]) -> str:
-    """Get cryptocurrency data."""
-    try:
-        results = []
-        for symbol in symbols:
+        # Process calendar data
+        if calendar is not None and not calendar.empty:
             try:
-                crypto = yf.Ticker(symbol)
-                info = crypto.info
-                
-                if info:
-                    data = CryptoData(
-                        symbol=symbol,
-                        name=info.get('name', ''),
-                        price=info.get('regularMarketPrice', 0.0),
-                        market_cap=info.get('marketCap', 0.0),
-                        volume_24h=info.get('volume24Hr', 0.0),
-                        change_24h=info.get('regularMarketChangePercent', 0.0),
-                        circulating_supply=info.get('circulatingSupply', 0.0),
-                        max_supply=info.get('maxSupply')
-                    )
-                    results.append(data)
+                earnings_info["next_earnings_date"] = calendar.index[0].strftime("%Y-%m-%d") if hasattr(calendar.index[0], 'strftime') else str(calendar.index[0])
+                earnings_info["eps_estimate"] = float(calendar.iloc[0].get("EPS Estimate", 0)) if pd.notna(calendar.iloc[0].get("EPS Estimate")) else None
+                earnings_info["revenue_estimate"] = float(calendar.iloc[0].get("Revenue Estimate", 0)) if pd.notna(calendar.iloc[0].get("Revenue Estimate")) else None
             except Exception as e:
-                logger.warning(f"Failed to get data for {symbol}: {e}")
-                continue
+                logger.warning(f"Error processing calendar data for {symbol}: {e}")
         
-        return json.dumps([crypto.model_dump() for crypto in results], indent=2)
+        # Process earnings history
+        if earnings_dates is not None and not earnings_dates.empty:
+            for date, row in earnings_dates.iterrows():
+                try:
+                    history_entry = {
+                        "date": date.strftime("%Y-%m-%d") if hasattr(date, 'strftime') else str(date),
+                        "eps_estimate": float(row.get("EPS Estimate", 0)) if pd.notna(row.get("EPS Estimate")) else None,
+                        "eps_actual": float(row.get("Reported EPS", 0)) if pd.notna(row.get("Reported EPS")) else None,
+                        "surprise": float(row.get("Surprise(%)", 0)) if pd.notna(row.get("Surprise(%)")) else None
+                    }
+                    earnings_info["earnings_history"].append(history_entry)
+                except Exception as e:
+                    logger.warning(f"Error processing earnings history entry for {symbol}: {e}")
+        
+        # Process earnings trend
+        if earnings_trend is not None and not earnings_trend.empty:
+            for date, row in earnings_trend.iterrows():
+                try:
+                    trend_entry = {
+                        "period": str(date),
+                        "eps_estimate": float(row.get("EPS Estimate", 0)) if pd.notna(row.get("EPS Estimate")) else None,
+                        "eps_trend": float(row.get("EPS Trend", 0)) if pd.notna(row.get("EPS Trend")) else None,
+                        "eps_revisions": float(row.get("EPS Revisions", 0)) if pd.notna(row.get("EPS Revisions")) else None
+                    }
+                    earnings_info["earnings_trend"].append(trend_entry)
+                except Exception as e:
+                    logger.warning(f"Error processing earnings trend entry for {symbol}: {e}")
+        
+        return json.dumps(earnings_info, indent=2)
     except Exception as e:
-        logger.error(f"Error getting cryptocurrency data: {e}")
-        return f"Failed to retrieve cryptocurrency data: {str(e)}"
+        logger.error(f"Error getting earnings info for {symbol}: {e}")
+        return f"Failed to retrieve earnings information: {str(e)}"
 
 
 @yfinance_server.tool(
-    name="get_esg_scores",
-    description="""Get ESG (Environmental, Social, Governance) scores for a company.
+    name="get_dividend_info",
+    description="""Get dividend information for a stock including history and yield.
     
 Args:
     symbol: str
         Stock ticker symbol (e.g., "AAPL", "MSFT", "GOOGL")
 """
 )
-async def get_esg_scores(symbol: str) -> str:
-    """Get ESG scores for a company."""
+async def get_dividend_info(symbol: str) -> str:
+    """Get dividend information for a stock."""
+    try:
+        symbol = validate_symbol(symbol)
+        stock = yf.Ticker(symbol)
+        info = stock.info
+        dividends = stock.dividends
+        
+        # Initialize dividend info
+        dividend_info = {
+            "symbol": symbol,
+            "dividend_rate": info.get("dividendRate"),
+            "dividend_yield": info.get("dividendYield"),
+            "payout_ratio": info.get("payoutRatio"),
+            "five_year_avg_dividend_yield": info.get("fiveYearAvgDividendYield"),
+            "dividend_history": [],
+            "next_dividend_date": None
+        }
+        
+        # Get next dividend date if available
+        if info.get("dividendDate"):
+            try:
+                div_date = datetime.fromtimestamp(info["dividendDate"])
+                dividend_info["next_dividend_date"] = div_date.strftime("%Y-%m-%d")
+            except Exception as e:
+                logger.warning(f"Error processing dividend date for {symbol}: {e}")
+        
+        # Process dividend history
+        if dividends is not None and not dividends.empty:
+            for date, amount in dividends.items():
+                try:
+                    history_entry = {
+                        "date": date.strftime("%Y-%m-%d") if hasattr(date, 'strftime') else str(date),
+                        "amount": float(amount) if pd.notna(amount) else None
+                    }
+                    dividend_info["dividend_history"].append(history_entry)
+                except Exception as e:
+                    logger.warning(f"Error processing dividend history entry for {symbol}: {e}")
+        
+        return json.dumps(dividend_info, indent=2)
+    except Exception as e:
+        logger.error(f"Error getting dividend info for {symbol}: {e}")
+        return f"Failed to retrieve dividend information: {str(e)}"
+
+
+@yfinance_server.tool(
+    name="get_balance_sheet_analysis",
+    description="""Get detailed balance sheet analysis including key ratios and trends.
+    
+Args:
+    symbol: str
+        Stock ticker symbol (e.g., "AAPL", "MSFT", "GOOGL")
+    period: str
+        Period type: "annual" or "quarterly"
+        Default: "annual"
+"""
+)
+async def get_balance_sheet_analysis(symbol: str, period: str = "annual") -> str:
+    """Get balance sheet analysis for a stock."""
+    try:
+        symbol = validate_symbol(symbol)
+        stock = yf.Ticker(symbol)
+        
+        # Get balance sheet data
+        balance_sheet = stock.balance_sheet if period == "annual" else stock.quarterly_balance_sheet
+        if balance_sheet is None or balance_sheet.empty:
+            return f"No balance sheet data available for {symbol}"
+            
+        # Initialize analysis
+        analysis = {
+            "symbol": symbol,
+            "total_assets": None,
+            "total_liabilities": None,
+            "total_equity": None,
+            "current_ratio": None,
+            "quick_ratio": None,
+            "debt_to_equity": None,
+            "working_capital": None,
+            "asset_turnover": None,
+            "quarterly_trends": []
+        }
+        
+        # Get latest values
+        latest = balance_sheet.iloc[:, 0]
+        
+        # Calculate key metrics
+        try:
+            total_assets = float(latest.get("Total Assets", 0))
+            total_liabilities = float(latest.get("Total Liabilities Net Minority Interest", 0))
+            current_assets = float(latest.get("Current Assets", 0))
+            current_liabilities = float(latest.get("Current Liabilities", 0))
+            inventory = float(latest.get("Inventory", 0))
+            
+            analysis["total_assets"] = total_assets
+            analysis["total_liabilities"] = total_liabilities
+            analysis["total_equity"] = total_assets - total_liabilities
+            
+            if current_liabilities != 0:
+                analysis["current_ratio"] = current_assets / current_liabilities
+                analysis["quick_ratio"] = (current_assets - inventory) / current_liabilities
+            
+            if total_liabilities != 0 and (total_assets - total_liabilities) != 0:
+                analysis["debt_to_equity"] = total_liabilities / (total_assets - total_liabilities)
+            
+            analysis["working_capital"] = current_assets - current_liabilities
+            
+            if total_assets != 0:
+                revenue = float(stock.financials.loc["Total Revenue", :].iloc[0]) if not stock.financials.empty else 0
+                analysis["asset_turnover"] = revenue / total_assets
+        except Exception as e:
+            logger.warning(f"Error calculating balance sheet metrics for {symbol}: {e}")
+        
+        # Calculate quarterly trends
+        for date, values in balance_sheet.items():
+            try:
+                trend = {
+                    "date": date.strftime("%Y-%m-%d") if hasattr(date, 'strftime') else str(date),
+                    "total_assets": float(values.get("Total Assets", 0)) if pd.notna(values.get("Total Assets")) else None,
+                    "total_liabilities": float(values.get("Total Liabilities Net Minority Interest", 0)) if pd.notna(values.get("Total Liabilities Net Minority Interest")) else None,
+                    "current_ratio": float(values.get("Current Assets", 0)) / float(values.get("Current Liabilities", 1)) if pd.notna(values.get("Current Assets")) and pd.notna(values.get("Current Liabilities")) and float(values.get("Current Liabilities", 0)) != 0 else None
+                }
+                analysis["quarterly_trends"].append(trend)
+            except Exception as e:
+                logger.warning(f"Error processing quarterly trend for {symbol}: {e}")
+        
+        return json.dumps(analysis, indent=2)
+    except Exception as e:
+        logger.error(f"Error getting balance sheet analysis for {symbol}: {e}")
+        return f"Failed to retrieve balance sheet analysis: {str(e)}"
+
+
+@yfinance_server.tool(
+    name="get_cash_flow_analysis",
+    description="""Get detailed cash flow analysis including key metrics and trends.
+    
+Args:
+    symbol: str
+        Stock ticker symbol (e.g., "AAPL", "MSFT", "GOOGL")
+    period: str
+        Period type: "annual" or "quarterly"
+        Default: "annual"
+"""
+)
+async def get_cash_flow_analysis(symbol: str, period: str = "annual") -> str:
+    """Get cash flow analysis for a stock."""
+    try:
+        symbol = validate_symbol(symbol)
+        stock = yf.Ticker(symbol)
+        
+        # Get cash flow data
+        cash_flow = stock.cashflow if period == "annual" else stock.quarterly_cashflow
+        if cash_flow is None or cash_flow.empty:
+            return f"No cash flow data available for {symbol}"
+            
+        # Initialize analysis
+        analysis = {
+            "symbol": symbol,
+            "operating_cash_flow": None,
+            "investing_cash_flow": None,
+            "financing_cash_flow": None,
+            "free_cash_flow": None,
+            "cash_flow_coverage": None,
+            "capital_expenditure": None,
+            "quarterly_trends": []
+        }
+        
+        # Get latest values
+        latest = cash_flow.iloc[:, 0]
+        
+        # Calculate key metrics
+        try:
+            operating_cf = float(latest.get("Operating Cash Flow", 0))
+            investing_cf = float(latest.get("Investing Cash Flow", 0))
+            financing_cf = float(latest.get("Financing Cash Flow", 0))
+            capex = float(latest.get("Capital Expenditure", 0))
+            
+            analysis["operating_cash_flow"] = operating_cf
+            analysis["investing_cash_flow"] = investing_cf
+            analysis["financing_cash_flow"] = financing_cf
+            analysis["capital_expenditure"] = capex
+            analysis["free_cash_flow"] = operating_cf - abs(capex)
+            
+            if operating_cf != 0:
+                total_debt = float(stock.balance_sheet.iloc[stock.balance_sheet.index.get_loc("Total Debt"), 0]) if "Total Debt" in stock.balance_sheet.index else 0
+                analysis["cash_flow_coverage"] = operating_cf / total_debt if total_debt != 0 else None
+        except Exception as e:
+            logger.warning(f"Error calculating cash flow metrics for {symbol}: {e}")
+        
+        # Calculate quarterly trends
+        for date, values in cash_flow.items():
+            try:
+                trend = {
+                    "date": date.strftime("%Y-%m-%d") if hasattr(date, 'strftime') else str(date),
+                    "operating_cash_flow": float(values.get("Operating Cash Flow", 0)) if pd.notna(values.get("Operating Cash Flow")) else None,
+                    "free_cash_flow": float(values.get("Operating Cash Flow", 0)) - abs(float(values.get("Capital Expenditure", 0))) if pd.notna(values.get("Operating Cash Flow")) and pd.notna(values.get("Capital Expenditure")) else None,
+                    "cash_flow_margin": float(values.get("Operating Cash Flow", 0)) / float(values.get("Total Revenue", 1)) if pd.notna(values.get("Operating Cash Flow")) and pd.notna(values.get("Total Revenue")) and float(values.get("Total Revenue", 0)) != 0 else None
+                }
+                analysis["quarterly_trends"].append(trend)
+            except Exception as e:
+                logger.warning(f"Error processing quarterly trend for {symbol}: {e}")
+        
+        return json.dumps(analysis, indent=2)
+    except Exception as e:
+        logger.error(f"Error getting cash flow analysis for {symbol}: {e}")
+        return f"Failed to retrieve cash flow analysis: {str(e)}"
+
+
+@yfinance_server.tool(
+    name="get_financial_ratios",
+    description="""Get comprehensive financial ratios including profitability, liquidity, solvency, and valuation metrics.
+    
+Args:
+    symbol: str
+        Stock ticker symbol (e.g., "AAPL", "MSFT", "GOOGL")
+"""
+)
+async def get_financial_ratios(symbol: str) -> str:
+    """Get financial ratios for a stock."""
     try:
         symbol = validate_symbol(symbol)
         stock = yf.Ticker(symbol)
         info = stock.info
         
-        if not info:
-            return f"No ESG data found for {symbol}"
-        
-        # Extract ESG data
-        esg_data = ESGScores(
-            symbol=symbol,
-            total_score=info.get('esgScore', 0.0),
-            environmental_score=info.get('environmentScore', 0.0),
-            social_score=info.get('socialScore', 0.0),
-            governance_score=info.get('governanceScore', 0.0),
-            controversy_level=info.get('controversyLevel', 0),
-            peer_rank=info.get('esgPerformance', ''),
-            peer_percentile=info.get('percentile', 0.0)
-        )
-        
-        return esg_data.model_dump_json(indent=2)
-    except Exception as e:
-        logger.error(f"Error getting ESG scores for {symbol}: {e}")
-        return f"Failed to retrieve ESG scores: {str(e)}"
-
-
-@yfinance_server.tool(
-    name="debug_symbol_data",
-    description="""Debug tool to see all available data for a symbol.
-    
-Args:
-    symbol: str
-        Symbol to debug (e.g., "BTC-USD", "AAPL")
-"""
-)
-async def debug_symbol_data(symbol: str) -> str:
-    """Debug tool to see all available data for a symbol."""
-    try:
-        symbol = validate_symbol(symbol)
-        stock = yf.Ticker(symbol)
-        
-        debug_info = {}
-        
-        # Get info data
-        try:
-            info = stock.info
-            debug_info["info_keys"] = list(info.keys()) if info else []
-            debug_info["info_sample"] = {k: v for k, v in list(info.items())[:20]} if info else {}
-            
-            # Look for price-related fields
-            price_fields = {}
-            for key, value in info.items():
-                if any(price_word in key.lower() for price_word in ['price', 'close', 'open', 'high', 'low']):
-                    price_fields[key] = value
-            debug_info["price_fields"] = price_fields
-            
-        except Exception as e:
-            debug_info["info_error"] = str(e)
-        
-        # Get historical data
-        try:
-            hist_1d = stock.history(period="1d")
-            if not hist_1d.empty:
-                debug_info["history_1d_last"] = {
-                    "date": hist_1d.index[-1].strftime("%Y-%m-%d %H:%M:%S"),
-                    "open": float(hist_1d["Open"].iloc[-1]),
-                    "high": float(hist_1d["High"].iloc[-1]),
-                    "low": float(hist_1d["Low"].iloc[-1]),
-                    "close": float(hist_1d["Close"].iloc[-1]),
-                    "volume": int(hist_1d["Volume"].iloc[-1]) if not pd.isna(hist_1d["Volume"].iloc[-1]) else 0
-                }
-            else:
-                debug_info["history_1d_error"] = "No data"
-        except Exception as e:
-            debug_info["history_1d_error"] = str(e)
-        
-        # Get minute data
-        try:
-            hist_1m = stock.history(period="1d", interval="1m")
-            if not hist_1m.empty:
-                debug_info["history_1m_last"] = {
-                    "date": hist_1m.index[-1].strftime("%Y-%m-%d %H:%M:%S"),
-                    "close": float(hist_1m["Close"].iloc[-1]),
-                    "volume": int(hist_1m["Volume"].iloc[-1]) if not pd.isna(hist_1m["Volume"].iloc[-1]) else 0
-                }
-            else:
-                debug_info["history_1m_error"] = "No data"
-        except Exception as e:
-            debug_info["history_1m_error"] = str(e)
-        
-        return json.dumps(debug_info, indent=2)
-    except Exception as e:
-        return f"Debug error: {str(e)}"
-
-
-def calculate_technical_indicators(data: pd.DataFrame) -> Dict[str, float]:
-    """Calculate technical analysis indicators."""
-    if data.empty:
-        return {}
-
-    try:
-        # Prepare data
-        df = data.copy()
-        df['Typical'] = (df['High'] + df['Low'] + df['Close']) / 3
-        
-        # Calculate SMAs
-        df['SMA_20'] = df['Close'].rolling(window=20).mean()
-        df['SMA_50'] = df['Close'].rolling(window=50).mean()
-        df['SMA_200'] = df['Close'].rolling(window=200).mean()
-        
-        # Calculate EMAs for MACD
-        df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
-        df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
-        
-        # Calculate MACD
-        df['MACD_Line'] = df['EMA_12'] - df['EMA_26']
-        df['MACD_Signal'] = df['MACD_Line'].ewm(span=9, adjust=False).mean()
-        df['MACD_Hist'] = df['MACD_Line'] - df['MACD_Signal']
-        
-        # Calculate RSI
-        delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        df['RSI_14'] = 100 - (100 / (1 + rs))
-        
-        # Calculate Stochastic Oscillator
-        low_14 = df['Low'].rolling(window=14).min()
-        high_14 = df['High'].rolling(window=14).max()
-        df['STOCH_K'] = 100 * ((df['Close'] - low_14) / (high_14 - low_14))
-        df['STOCH_D'] = df['STOCH_K'].rolling(window=3).mean()
-        
-        # Calculate Bollinger Bands
-        df['BB_Middle'] = df['Close'].rolling(window=20).mean()
-        bb_std = df['Close'].rolling(window=20).std()
-        df['BB_Upper'] = df['BB_Middle'] + (bb_std * 2)
-        df['BB_Lower'] = df['BB_Middle'] - (bb_std * 2)
-        
-        # Calculate ATR
-        df['TR'] = pd.DataFrame({
-            'HL': df['High'] - df['Low'],
-            'HC': abs(df['High'] - df['Close'].shift(1)),
-            'LC': abs(df['Low'] - df['Close'].shift(1))
-        }).max(axis=1)
-        df['ATR_14'] = df['TR'].rolling(window=14).mean()
-        
-        # Calculate OBV (On Balance Volume)
-        df['OBV'] = (np.sign(df['Close'].diff()) * df['Volume']).fillna(0).cumsum()
-        
-        # Calculate MFI (Money Flow Index)
-        typical_price = (df['High'] + df['Low'] + df['Close']) / 3
-        raw_money_flow = typical_price * df['Volume']
-        positive_flow = pd.Series(np.where(typical_price > typical_price.shift(1), raw_money_flow, 0))
-        negative_flow = pd.Series(np.where(typical_price < typical_price.shift(1), raw_money_flow, 0))
-        positive_mf = positive_flow.rolling(window=14).sum()
-        negative_mf = negative_flow.rolling(window=14).sum()
-        mfi = 100 - (100 / (1 + (positive_mf / negative_mf)))
-        df['MFI_14'] = mfi
-        
-        # Calculate Williams %R
-        highest_high = df['High'].rolling(window=14).max()
-        lowest_low = df['Low'].rolling(window=14).min()
-        df['Williams_R'] = ((highest_high - df['Close']) / (highest_high - lowest_low)) * -100
-        
-        # Calculate CCI (Commodity Channel Index)
-        tp = (df['High'] + df['Low'] + df['Close']) / 3
-        tp_sma = tp.rolling(window=20).mean()
-        mad = tp.rolling(window=20).apply(lambda x: pd.Series(x).mad())
-        df['CCI_20'] = (tp - tp_sma) / (0.015 * mad)
-        
-        # Get the latest values
-        latest = df.iloc[-1]
-        return {
-            'sma_20': latest['SMA_20'],
-            'sma_50': latest['SMA_50'],
-            'sma_200': latest['SMA_200'],
-            'ema_12': latest['EMA_12'],
-            'ema_26': latest['EMA_26'],
-            'macd_line': latest['MACD_Line'],
-            'macd_signal': latest['MACD_Signal'],
-            'macd_histogram': latest['MACD_Hist'],
-            'rsi_14': latest['RSI_14'],
-            'stoch_k': latest['STOCH_K'],
-            'stoch_d': latest['STOCH_D'],
-            'bollinger_upper': latest['BB_Upper'],
-            'bollinger_middle': latest['BB_Middle'],
-            'bollinger_lower': latest['BB_Lower'],
-            'atr_14': latest['ATR_14'],
-            'obv': latest['OBV'],
-            'mfi_14': latest['MFI_14'],
-            'williams_r': latest['Williams_R'],
-            'cci_20': latest['CCI_20']
+        # Initialize ratios
+        ratios = {
+            "symbol": symbol,
+            "profitability": {},
+            "liquidity": {},
+            "solvency": {},
+            "efficiency": {},
+            "valuation": {},
+            "growth": {}
         }
+        
+        # Profitability ratios
+        try:
+            ratios["profitability"] = {
+                "return_on_equity": info.get("returnOnEquity"),
+                "return_on_assets": info.get("returnOnAssets"),
+                "profit_margin": info.get("profitMargins"),
+                "operating_margin": info.get("operatingMargins"),
+                "gross_margin": info.get("grossMargins")
+            }
+        except Exception as e:
+            logger.warning(f"Error calculating profitability ratios for {symbol}: {e}")
+        
+        # Liquidity ratios
+        try:
+            balance_sheet = stock.balance_sheet
+            if not balance_sheet.empty:
+                current_assets = float(balance_sheet.iloc[balance_sheet.index.get_loc("Current Assets"), 0])
+                current_liabilities = float(balance_sheet.iloc[balance_sheet.index.get_loc("Current Liabilities"), 0])
+                inventory = float(balance_sheet.iloc[balance_sheet.index.get_loc("Inventory"), 0])
+                cash = float(balance_sheet.iloc[balance_sheet.index.get_loc("Cash And Cash Equivalents"), 0])
+                
+                ratios["liquidity"] = {
+                    "current_ratio": current_assets / current_liabilities if current_liabilities != 0 else None,
+                    "quick_ratio": (current_assets - inventory) / current_liabilities if current_liabilities != 0 else None,
+                    "cash_ratio": cash / current_liabilities if current_liabilities != 0 else None
+                }
+        except Exception as e:
+            logger.warning(f"Error calculating liquidity ratios for {symbol}: {e}")
+        
+        # Solvency ratios
+        try:
+            ratios["solvency"] = {
+                "debt_to_equity": info.get("debtToEquity"),
+                "interest_coverage": info.get("interestCoverage")
+            }
+        except Exception as e:
+            logger.warning(f"Error calculating solvency ratios for {symbol}: {e}")
+        
+        # Efficiency ratios
+        try:
+            ratios["efficiency"] = {
+                "asset_turnover": info.get("assetTurnover"),
+                "inventory_turnover": info.get("inventoryTurnover"),
+                "receivables_turnover": info.get("receivablesTurnover")
+            }
+        except Exception as e:
+            logger.warning(f"Error calculating efficiency ratios for {symbol}: {e}")
+        
+        # Valuation ratios
+        try:
+            ratios["valuation"] = {
+                "pe_ratio": info.get("trailingPE"),
+                "forward_pe": info.get("forwardPE"),
+                "price_to_book": info.get("priceToBook"),
+                "price_to_sales": info.get("priceToSalesTrailing12Months"),
+                "ev_to_ebitda": info.get("enterpriseToEbitda")
+            }
+        except Exception as e:
+            logger.warning(f"Error calculating valuation ratios for {symbol}: {e}")
+        
+        # Growth ratios
+        try:
+            ratios["growth"] = {
+                "revenue_growth": info.get("revenueGrowth"),
+                "earnings_growth": info.get("earningsGrowth"),
+                "eps_growth": info.get("earningsQuarterlyGrowth")
+            }
+        except Exception as e:
+            logger.warning(f"Error calculating growth ratios for {symbol}: {e}")
+        
+        return json.dumps(ratios, indent=2)
     except Exception as e:
-        logger.error(f"Error calculating technical indicators: {e}")
-        return {}
-
-
-@yfinance_server.tool(
-    name="get_technical_analysis",
-    description="""Get comprehensive technical analysis indicators for a stock.
-    
-Args:
-    symbol: str
-        Stock ticker symbol (e.g., "AAPL", "MSFT", "GOOGL")
-    interval: str
-        Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo)
-        Default: "1d"
-    period: str
-        Data period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
-        Default: "6mo"
-"""
-)
-async def get_technical_analysis(
-    symbol: str,
-    interval: str = "1d",
-    period: str = "6mo"
-) -> str:
-    """Get technical analysis indicators for a stock."""
-    try:
-        symbol = validate_symbol(symbol)
-        stock = yf.Ticker(symbol)
-        
-        # Get historical data for calculations
-        hist = stock.history(period=period, interval=interval)
-        if hist.empty:
-            return f"No historical data found for {symbol}"
-        
-        # Calculate indicators
-        indicators = calculate_technical_indicators(hist)
-        if not indicators:
-            return f"Failed to calculate indicators for {symbol}"
-        
-        # Create technical analysis response
-        technical_data = TechnicalIndicators(
-            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            symbol=symbol,
-            **indicators
-        )
-        
-        # Log indicator values
-        logger.info(
-            f"Technical Analysis for {symbol}:\n"
-            f"MACD: {indicators['macd_line']:.2f} (Signal: {indicators['macd_signal']:.2f}, Hist: {indicators['macd_histogram']:.2f})\n"
-            f"RSI: {indicators['rsi_14']:.2f}\n"
-            f"Stochastic: %K={indicators['stoch_k']:.2f}, %D={indicators['stoch_d']:.2f}\n"
-            f"Bollinger Bands: Upper={indicators['bollinger_upper']:.2f}, Middle={indicators['bollinger_middle']:.2f}, Lower={indicators['bollinger_lower']:.2f}"
-        )
-        
-        return technical_data.model_dump_json(indent=2)
-    except Exception as e:
-        logger.error(f"Error getting technical analysis for {symbol}: {e}")
-        return f"Failed to retrieve technical analysis: {str(e)}"
+        logger.error(f"Error getting financial ratios for {symbol}: {e}")
+        return f"Failed to retrieve financial ratios: {str(e)}"
 
 
 def main():
