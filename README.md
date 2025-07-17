@@ -71,7 +71,7 @@ A comprehensive financial data analysis server built with the Model Context Prot
 1. Ensure you have Python 3.11.5 or later installed
 2. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/yahoo-finance-mcp.git
+git clone https://github.com/leo-ye0/yahoo-finance-mcp.git
 cd yahoo-finance-mcp
 ```
 
